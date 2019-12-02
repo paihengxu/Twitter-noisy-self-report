@@ -1,7 +1,4 @@
 # check whether need these imports
-import gzip
-import json
-import os
 from noisy_self_report import *
 
 class filterEffect(noisySelfReport):

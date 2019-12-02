@@ -4,11 +4,7 @@ from noisy_self_report import *
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option('--task', dest='Task',
-                      help='gender or race', metavar='TASK')
-    # parser.add_option('--mode', dest='Mode',
-    #                   help='score for calculating the score with different window size, '
-    #                        'label for generate label for different threshold', metavar='MODE')
+    parser.add_option('--task', dest='Task', help='gender or race', metavar='TASK')
     parser.add_option('--window', type='int', dest='Win', default=5, help='hyperparameter for window size', metavar='WIN')
     parser.add_option('--threshold', type='float', dest='Thre', default=0.35, help='hyperparameter for self reporty score threshold',
                       metavar='THRE')
