@@ -11,6 +11,7 @@ python scrpts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile
 * ```--simple``` and ```--tfidf``` flags indicate simple co-occurrence weighting and tfidf weighting strategies respectively.
 
 ## Experiments in the paper
+### Noisy self report
 <!--- we have to at least provide users in dev set to reproduce the results-->
 To test the effect of our weighted group filters (Table 2), run:
 ```
@@ -22,4 +23,17 @@ To reproduce the performance on dev set, run:
 python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir ../noisy_labeled --simple --eval_dev
 ```
 Modify the hyper-parameters, to get different results.
+
+### Demographics prediction
+Collect 200 tweets for each user.
+
+### Group analysis
+To get results for list-based features and quantitative linguistic features, run
+```
+python group_analysis.py --group latin --sourcedir /export/fs03/a10/pxu/groups-analysis/src/scraped/merged/ --outdir ../result/
+```
+* change the input for ```--group``` to collect the features for different group.
+* the format for source timelines for each group is ```/source/directory/{group}/{userid}.json.gz```.
+* intermediate results for behavioural analysis, pre-trained linguistic models, and statistical analysis are stored in the ```--outdir```.
+
 
