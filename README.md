@@ -57,3 +57,5 @@ To get statistical difference for various measures, run ```scrpts/correlation.py
 * pass the argument ```list``` to the script to get the Kendall's Tau correlation for top items in the lists.
 * pass the argument ```numerical```, ```intangible```, ```behavior``` to the script to get the Mann Whitney U test results for corresponding features
 after obtaining the group analysis results.
+
+
