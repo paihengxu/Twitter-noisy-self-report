@@ -1,4 +1,3 @@
-# check whether need these imports
 from noisy_self_report import *
 
 class filterEffect(noisySelfReport):
