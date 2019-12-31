@@ -277,7 +277,7 @@ parser.add_option('--outdir', type='str', help='output directory for group analy
 (options, args) = parser.parse_args()
 
 print('loading contractions')
-contractions = loadCSV('../src/group_analysis/contractions.csv')
+contractions = loadCSV('src/group_analysis/contractions.csv')
 
 group = options.Group
 sourcedir = options.SourceDir

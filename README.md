@@ -4,10 +4,10 @@ Code for "Using Noisy Self-Reports to Predict Twitter User Demographics"
 <!--- sourcefile defined later. maybe present some sample users without violating term of services -->
 To get noisy labeled dataset, run:
 ```
-python scrpts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir ../noisy_labeled --simple
+python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir noisy_labeled --simple
 ```
 * ```task``` supports race and gender.
-* ```window``` and ```threshold``` are the hyper-parameters we choose based on manual labeled development set in ```/src/manual_labeled```.
+* ```window``` and ```threshold``` are the hyper-parameters we choose based on manual labeled development set in ```src/manual_labeled```.
 * ```--simple``` and ```--tfidf``` flags indicate simple co-occurrence weighting and tfidf weighting strategies respectively.
 
 ## Dataset
@@ -19,7 +19,7 @@ collected using noisy self report from users' descriptions, with simple co-occur
 ```rule_out_bigrams.json.gz``` contains bigrams with race-related query words that cause false positive.
 * files in ```src/self_reporty_words/``` are candidate self-report words collected from 177M user descriptions.
 
-  * To collect the candidate words, please refer to scripts in ```/scripts/iama/```.
+  * To collect the candidate words, please refer to scripts in ```scripts/iama/```.
   * We also refine the collections by only keeping the words that are majorly tagged as noun or adjective by [GoogleNgrams](https://books.google.com/ngrams/info).
 ## Experiments in the paper
 ### Noisy self report
@@ -31,7 +31,7 @@ python scripts/filter_effect.py
 
 To reproduce the performance on dev set, run:
 ```
-python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir ../noisy_labeled --simple --eval_dev
+python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir noisy_labeled --simple --eval_dev
 ```
 Modify the hyper-parameters, to get different results.
 
@@ -41,7 +41,7 @@ Collect 200 tweets for each user.
 ### Group analysis
 To get results for list-based features and quantitative linguistic features, run
 ```
-python group_analysis.py --group latin --sourcedir /export/fs03/a10/pxu/groups-analysis/src/scraped/merged/ --outdir ../result/
+python scripts/group_analysis.py --group latin --sourcedir /export/fs03/a10/pxu/groups-analysis/src/scraped/merged/ --outdir result/
 ```
 * change the input for ```--group``` to collect the features for different group.
 * before running the script, the timeline for each users should be collected first. 

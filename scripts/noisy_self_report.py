@@ -47,13 +47,13 @@ def save_json_gz(dictionary, fn, mode='w'):
 
 class noisySelfReport:
     def __init__(self, task, filter_params, win, thre, tfidf, sourcefile, outdir, eval=False,
-                 race_dev_set_fn='../src/manual_labeled/race_dev_set.json.gz',
-                 gender_dev_set_fn='../src/manual_labeled/gender_dev_set.json.gz',
-                 sword_freq_noun_fn='../src/self_reporty_words/refined_selfreporty_noun_freq.json.gz',
-                 sword_count_noun_fn='../src/self_reporty_words/refined_selfreporty_noun_count.json.gz',
-                 sword_freq_adj_fn='../src/self_reporty_words/refined_selfreporty_adj_freq.json.gz',
-                 sword_count_adj_fn='../src/self_reporty_words/refined_selfreporty_adj_count.json.gz',
-                 rule_out_bigram='../src/manual_labeled/rule_out_bigrams.json.gz',
+                 race_dev_set_fn='src/manual_labeled/race_dev_set.json.gz',
+                 gender_dev_set_fn='src/manual_labeled/gender_dev_set.json.gz',
+                 sword_freq_noun_fn='src/self_reporty_words/refined_selfreporty_noun_freq.json.gz',
+                 sword_count_noun_fn='src/self_reporty_words/refined_selfreporty_noun_count.json.gz',
+                 sword_freq_adj_fn='src/self_reporty_words/refined_selfreporty_adj_freq.json.gz',
+                 sword_count_adj_fn='src/self_reporty_words/refined_selfreporty_adj_count.json.gz',
+                 rule_out_bigram='src/manual_labeled/rule_out_bigrams.json.gz',
                  power=1):
         # gender or race
         self.task = task
