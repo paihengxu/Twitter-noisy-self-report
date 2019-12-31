@@ -3,12 +3,12 @@ Code for "Using Noisy Self-Reports to Predict Twitter User Demographics"
 
 <!--- sourcefile defined later. maybe present some sample users without violating term of services -->
 To get noisy labeled dataset, run:
-```
-python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir noisy_labeled --simple
+```python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile src/sample_tweet.json.gz --outdir noisy_labeled --simple
 ```
 * ```task``` supports race and gender.
 * ```window``` and ```threshold``` are the hyper-parameters we choose based on manual labeled development set in ```src/manual_labeled```.
 * ```--simple``` and ```--tfidf``` flags indicate simple co-occurrence weighting and tfidf weighting strategies respectively.
+* we provide a small sample dataset in ```src/sample_tweet.json.gz```. Note the tweet records are fake and the descriptions are tweaked. The scores calculated based on original descriptions are in ```src/sample_tweet_description.json```.
 
 ## Dataset
 We provide our collected datasets in ```src/```. 
@@ -31,9 +31,10 @@ python scripts/filter_effect.py
 
 To reproduce the performance on dev set, run:
 ```
-python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile ${src} --outdir noisy_labeled --simple --eval_dev
+python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile path/to/sourcefile --outdir noisy_labeled --simple --eval_dev
 ```
-Modify the hyper-parameters, to get different results.
+* modify the hyper-parameters, to get different results.
+* contact the authors for the dev set used in the paper.
 
 ### Demographics prediction
 Collect 200 tweets for each user.
@@ -58,4 +59,5 @@ To get statistical difference for various measures, run ```scrpts/correlation.py
 * pass the argument ```numerical```, ```intangible```, ```behavior``` to the script to get the Mann Whitney U test results for corresponding features
 after obtaining the group analysis results.
 
-
+## Contact
+For other questions, please contact ```zach@cs.jhu.edu``` or ```paiheng@jhu.edu```.
