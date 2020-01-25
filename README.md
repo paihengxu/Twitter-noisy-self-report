@@ -3,7 +3,8 @@ Code for "Using Noisy Self-Reports to Predict Twitter User Demographics"
 
 <!--- sourcefile defined later. maybe present some sample users without violating term of services -->
 To get noisy labeled dataset, run:
-```python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile src/sample_tweet.json.gz --outdir noisy_labeled --simple
+```
+python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile src/sample_tweet.json.gz --outdir noisy_labeled --simple
 ```
 * ```task``` supports race and gender.
 * ```window``` and ```threshold``` are the hyper-parameters we choose based on manual labeled development set in ```src/manual_labeled```.
