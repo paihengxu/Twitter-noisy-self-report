@@ -7,6 +7,7 @@ import gzip
 import json
 from typing import NamedTuple, List
 import warnings
+import pickle
 
 warnings.filterwarnings('ignore')
 import torch
@@ -29,6 +30,7 @@ ZACH_MAP = {
     "Hispanic": 2,
     "H/L": 2,
     "latin": 2,
+    "latinx": 2,
     "White": 4,
     "W": 4,
     "white": 4,
@@ -87,7 +89,7 @@ def read_bert_embeddings(dataset):
     embed_dir = '/export/c10/pxu/data/race/distil_bert_embed'
 
     for user in dataset:
-        embed_fn = os.path.join(embed_dir, '{}_embed.json.gz'.format(user))
+        embed_fn = os.path.join(embed_dir, '{}_embed.json.gz'.format(user.user_id))
         with gzip.open(embed_fn, 'r') as inf:
             for line in inf:
                 data = json.loads(line.strip().decode('utf8'))
@@ -104,7 +106,7 @@ def vectorize(feature_dict, labels):
     vecs = []
     label_vecs = []
     for k, v in feature_dict.items():
-        if type(v) == np.ndarray and len(v) == 768:
+        if len(v) == 768:
             label_vecs.append(labels[k])
             vecs.append(v)
     return vecs, label_vecs
@@ -251,11 +253,13 @@ def get_bert_feature(train_fn, dev_fn, test_fn, input='description'):
             if input == 'description':
                 feature = get_bert_embeddings(data, input)
             else:
+                print("reading embedding for {}".format(fn))
                 feature = read_bert_embeddings(data)
             write_dict_to_json(feature, fn=outfn)
 
         feats_data, feats_label = vectorize(feature, labels)
-        print(len(feats_data), len(feats_data[1]))
+        print(len(feats_data))
+        print(len(feats_data[1]))
         result[fn_key]['data'] = feats_data
         result[fn_key]['label'] = feats_label
 
@@ -263,7 +267,7 @@ def get_bert_feature(train_fn, dev_fn, test_fn, input='description'):
 
 
 def fit_test_model(train, train_label, test, test_label, model, c):
-    print("Size of training set:", len(train_label))
+    # print("Size of training set:", len(train_label))
     try:
         model.fit(train, train_label)
     except ValueError as err:
@@ -289,10 +293,10 @@ def fit_test_model(train, train_label, test, test_label, model, c):
         f"{report['accuracy']:.4},{report['macro avg']['precision']:.4},{report['macro avg']['recall']:.4},{report['macro avg']['f1-score']:.4}",
         sep='\t')
 
-    return c, report['macro avg']['f1-score']
+    return c, report['macro avg']['f1-score'], report['accuracy'], model
 
 
-def param_search(dataset):
+def param_search(dataset, dataset_setting, task):
     """
     only c in l2 rugularization for now
     """
@@ -306,10 +310,29 @@ def param_search(dataset):
                            dataset['dev']['label'], model, c))
 
     best_c = sorted(result_list, key=lambda x: x[1], reverse=True)[0][0]
-    best_model = LogisticRegression(solver='liblinear', penalty='l2', C=best_c, random_state=0)
+    # best_model = LogisticRegression(solver='liblinear', penalty='l2', C=best_c, random_state=0)
+    best_model = sorted(result_list, key=lambda x: x[1], reverse=True)[0][3]
     print('best model performance on test set:', best_c)
-    fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['test']['data'],
-                   dataset['test']['label'], best_model, best_c)
+    # c, f1, acc = fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['test']['data'],
+    #                dataset['test']['label'], best_model, best_c)
+    y_pred = best_model.predict(dataset['test']['data'])
+    report = classification_report(dataset['test']['label'], y_pred, output_dict=True)
+
+    ### saving logits
+    y_pred_logits = best_model.predict_proba(dataset['test']['data'])
+    with open("{}_{}.logits.json".format(task, dataset_setting), 'w') as outf:
+        for probs, true_label in zip(y_pred_logits, dataset['test']['label']):
+            obj = {"label": true_label, "logits": probs.tolist()}
+            outf.write("{}\n".format(json.dumps(obj)))
+
+    print(
+        f"{report['accuracy']:.4},{report['macro avg']['precision']:.4},{report['macro avg']['recall']:.4},{report['macro avg']['f1-score']:.4}",
+        sep='\t')
+
+    with open("{}.p".format(dataset_setting), 'wb') as file:
+        pickle.dump(best_model, file)
+
+    return report['macro avg']['f1-score'], report['accuracy']
 
 
 ### experiments
@@ -320,22 +343,24 @@ def run_description_model():
                                    dev_fn=os.path.join('../zach_dataset', '{}_dev.jsonl'.format(task)),
                                    test_fn=os.path.join('../zach_dataset', '{}_test.jsonl'.format(task)))
 
-        param_search(dataset)
+        param_search(dataset, "description", task)
 
 
-def run_unigram_model():
+def run_timeline_model():
     data_dir = '/export/c10/zach/demographics/models/datasets/noisy'
     baseline_dir = '/export/c10/zach/demographics/models/datasets/baseline'
-    # datasets = ['baseline', 'balanced.7756', 'group_person.indorg', 'exact_group.thre035']
-    datasets = ['baseline']
+    datasets = ['baseline', 'group_person.indorg', 'exact_group.thre035', 'balanced.7756']
+    # datasets = ['baseline']
+    outf = open('model_result.csv', 'w')
     for task in ['baseline', 'balanced']:
+        outf.write("{}\n".format(task))
         for dataset_name in datasets:
             for crowd in [True, False]:
                 if dataset_name == 'baseline' and crowd:
                     continue
                 start = time.time()
                 print("task: {}, dataset: {}, use_crowd: {}".format(task, dataset_name, crowd))
-                train_dir = data_dir if task != 'baseline' else baseline_dir
+                train_dir = data_dir if dataset_name != 'baseline' else baseline_dir
                 dataset = get_bert_feature(
                     train_fn=os.path.join(train_dir, '{}_train.bert_tweets.json.gz'.format(dataset_name)),
                     dev_fn=os.path.join(baseline_dir, '{}_dev.bert_tweets.json.gz'.format(task)),
@@ -352,9 +377,14 @@ def run_unigram_model():
                     dataset['train']['data'] += tmp_dataset['train']['data']
                     dataset['train']['label'] += tmp_dataset['train']['label']
 
-                param_search(dataset)
+                dataset_setting = dataset_name
+                dataset_setting += "+crowd" if crowd else ""
+
+                best_f1, best_acc = param_search(dataset, dataset_setting, task)
+                outf.write("{}\n".format(",".join([dataset_setting, str(best_f1), str(best_acc)])))
 
                 print(time.time() - start)
+    outf.close()
 
 
 def get_all_user_ids():
@@ -406,9 +436,29 @@ def get_all_user_embeddings_parallel():
                 write_dict_to_json(embed_dict, fn=outfn, verbose=False)
 
 
+def get_all_user_text():
+    fn_list = glob.glob('/export/c10/zach/demographics/models/datasets/baseline/' + '*train.bert_tweets.json.gz')
+    # fn_list += glob.glob('/export/c10/zach/demographics/models/datasets/noisy/' + '*train.bert_tweets.json.gz')
+    print(len(fn_list))
+    outf = open('baseline_tweets.txt', 'w')
+    tweet_ids = set()
+    for fn in fn_list:
+        print(fn)
+        with gzip.open(fn, 'r') as inf:
+            for line in inf:
+                data = json.loads(line.strip().decode('utf8'))
+                if data['id_str'] in tweet_ids:
+                    continue
+                tweet_ids.add(data['id_str'])
+                for t in data['texts']:
+                    outf.write("{}\n".format(t))
+                outf.write("\n")
+    outf.close()
+
 
 if __name__ == '__main__':
     # run_description_model()
-    # run_unigram_model()
+    run_timeline_model()
     # get_all_user_embeddings()
-    get_all_user_embeddings_parallel()
+    # get_all_user_embeddings_parallel()
+    # get_all_user_text()
