@@ -11,9 +11,6 @@ import pickle
 
 warnings.filterwarnings('ignore')
 import torch
-# from keras.preprocessing.sequence import pad_sequences
-# from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-# from tqdm import tqdm
 from pytorch_transformers import *
 from transformers import DistilBertModel, DistilBertTokenizer
 from sklearn.linear_model import LogisticRegression
@@ -36,6 +33,8 @@ ZACH_MAP = {
     "white": 4,
 }
 
+MODEL_NAME = "distilbert-base-uncased"
+embed_dir = '/path/to/embeddings'
 
 class TweetUser(NamedTuple):
     user_id: str
@@ -86,7 +85,6 @@ def get_bert_embeddings(corpus, model=None, tokenizer=None, device=None, input='
 
 def read_bert_embeddings(dataset):
     features = {}
-    embed_dir = '/export/c10/pxu/data/race/distil_bert_embed'
 
     for user in dataset:
         embed_fn = os.path.join(embed_dir, '{}_embed.json.gz'.format(user.user_id))
@@ -132,7 +130,6 @@ def construct_dataset(fn, input='description'):
 
 
 def preprocess_text(text):
-    # TODO: url? username?
     return text.lower()
 
 
@@ -201,10 +198,9 @@ def read_user_ids(fn):
     return user_ids
 
 
-def init_models():
-    model_name = "distilbert-base-uncased"
+def init_models(distil=True, model_name=MODEL_NAME):
     # 'bert-base-uncased'
-    if model_name == "distilbert-base-uncased":
+    if distil:
         tokenizer = DistilBertTokenizer.from_pretrained(model_name)
         model = DistilBertModel.from_pretrained(model_name)
     else:
@@ -244,9 +240,7 @@ def get_bert_feature(train_fn, dev_fn, test_fn, input='description'):
 
         name = os.path.basename(fn).split('.')[0]
 
-        # outfn = '{}_{}.bert.json.gz'.format(name, fn_key)
         outfn = '{}.bert.json.gz'.format(name)
-        # print('reading/writing to', outfn)
         if os.path.exists(outfn):
             feature = read_dict_from_json(fn=outfn)
         else:
@@ -267,27 +261,10 @@ def get_bert_feature(train_fn, dev_fn, test_fn, input='description'):
 
 
 def fit_test_model(train, train_label, test, test_label, model, c):
-    # print("Size of training set:", len(train_label))
-    try:
-        model.fit(train, train_label)
-    except ValueError as err:
-        print(err)
-        # print(len(train))
-        print(type(train[0]))
-        print(train_label[0])
-        # model.fit([train[0]], [train_label[0]])
-        os._exit(1)
-    # Predict
-    # p_pred = model.predict_proba(feats_tst_A)
+    model.fit(train, train_label)
     # Metrics
     y_pred = model.predict(test)
-    score_ = model.score(test, test_label)
-    conf_m = confusion_matrix(test_label, y_pred)
     report = classification_report(test_label, y_pred, output_dict=True)
-
-    # print('score_:', score_, end='\n\n')
-    # print('conf_m:', conf_m, sep='\n', end='\n\n')
-    # print('report:', str(report), sep='\n')
 
     print(
         f"{report['accuracy']:.4},{report['macro avg']['precision']:.4},{report['macro avg']['recall']:.4},{report['macro avg']['f1-score']:.4}",
@@ -296,39 +273,52 @@ def fit_test_model(train, train_label, test, test_label, model, c):
     return c, report['macro avg']['f1-score'], report['accuracy'], model
 
 
-def param_search(dataset, dataset_setting, task):
-    """
-    only c in l2 rugularization for now
-    """
-    C_param_range = [0.001, 0.01, 0.1, 1, 10, 100]
-    result_list = []
-    for c in C_param_range:
-        print(c)
-        model = LogisticRegression(solver='liblinear', penalty='l2', C=c, random_state=0)
-        result_list.append(
-            fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['dev']['data'],
-                           dataset['dev']['label'], model, c))
-
-    best_c = sorted(result_list, key=lambda x: x[1], reverse=True)[0][0]
-    # best_model = LogisticRegression(solver='liblinear', penalty='l2', C=best_c, random_state=0)
-    best_model = sorted(result_list, key=lambda x: x[1], reverse=True)[0][3]
-    print('best model performance on test set:', best_c)
-    # c, f1, acc = fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['test']['data'],
-    #                dataset['test']['label'], best_model, best_c)
-    y_pred = best_model.predict(dataset['test']['data'])
-    report = classification_report(dataset['test']['label'], y_pred, output_dict=True)
-
-    ### saving logits
-    y_pred_logits = best_model.predict_proba(dataset['test']['data'])
-    with open("{}_{}.logits.json".format(task, dataset_setting), 'w') as outf:
-        for probs, true_label in zip(y_pred_logits, dataset['test']['label']):
+def save_logits(best_model, dataset, split, dataset_setting, task):
+    y_pred_logits = best_model.predict_proba(dataset[split]['data'])
+    with open("logits/" + "{}_{}_{}.logits.json".format(task, dataset_setting, split), 'w') as outf:
+        for probs, true_label in zip(y_pred_logits, dataset[split]['label']):
             obj = {"label": true_label, "logits": probs.tolist()}
             outf.write("{}\n".format(json.dumps(obj)))
+
+
+def param_search(dataset, dataset_setting, task):
+    """
+    only c in l2 regularization
+    """
+    model_fn = "{}.p".format(dataset_setting)
+    if os.path.exists(model_fn):
+        print("loading model from:", model_fn)
+        best_model = pickle.load(open(model_fn, 'rb'))
+        y_pred = best_model.predict(dataset['test']['data'])
+        report = classification_report(dataset['test']['label'], y_pred, output_dict=True)
+    else:
+        C_param_range = [0.001, 0.01, 0.1, 1, 10, 100]
+        result_list = []
+        for c in C_param_range:
+            print(c)
+            model = LogisticRegression(solver='liblinear', penalty='l2', C=c, random_state=0)
+            result_list.append(
+                fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['dev']['data'],
+                               dataset['dev']['label'], model, c))
+
+        best_c = sorted(result_list, key=lambda x: x[1], reverse=True)[0][0]
+        # best_model = LogisticRegression(solver='liblinear', penalty='l2', C=best_c, random_state=0)
+        best_model = sorted(result_list, key=lambda x: x[1], reverse=True)[0][3]
+        print('best model performance on test set:', best_c)
+        # c, f1, acc = fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['test']['data'],
+        #                dataset['test']['label'], best_model, best_c)
+        y_pred = best_model.predict(dataset['test']['data'])
+        report = classification_report(dataset['test']['label'], y_pred, output_dict=True)
 
     print(
         f"{report['accuracy']:.4},{report['macro avg']['precision']:.4},{report['macro avg']['recall']:.4},{report['macro avg']['f1-score']:.4}",
         sep='\t')
 
+    ### saving logits
+    save_logits(best_model, dataset, 'dev', dataset_setting, task)
+    save_logits(best_model, dataset, 'test', dataset_setting, task)
+
+    ### saving model
     with open("{}.p".format(dataset_setting), 'wb') as file:
         pickle.dump(best_model, file)
 
@@ -347,8 +337,8 @@ def run_description_model():
 
 
 def run_timeline_model():
-    data_dir = '/export/c10/zach/demographics/models/datasets/noisy'
-    baseline_dir = '/export/c10/zach/demographics/models/datasets/baseline'
+    data_dir = '/path/to/training/data'
+    baseline_dir = '/path/to/dev_test/data'
     datasets = ['baseline', 'group_person.indorg', 'exact_group.thre035', 'balanced.7756']
     # datasets = ['baseline']
     outf = open('model_result.csv', 'w')
@@ -387,27 +377,9 @@ def run_timeline_model():
     outf.close()
 
 
-def get_all_user_ids():
-    fn_list = glob.glob('/export/c10/zach/demographics/models/datasets/baseline/' + '*bert_tweets.json.gz')
-    fn_list += glob.glob('/export/c10/zach/demographics/models/datasets/noisy/' + '*bert_tweets.json.gz')
-    print(len(fn_list))
-    tweet_ids = set()
-    for fn in fn_list:
-        print(fn)
-        with gzip.open(fn, 'r') as inf:
-            for line in inf:
-                data = json.loads(line.strip().decode('utf8'))
-                tweet_ids.add(data['id_str'])
-
-    with open('all_user_ids.txt', 'w') as outf:
-        for ele in tweet_ids:
-            outf.write("{}\n".format(ele))
-
-
 def get_all_user_embeddings_parallel():
     job_num = sys.argv[-1]
     assert 0 <= int(job_num) <= 3
-    embed_dir = '/export/c10/pxu/data/race/distil_bert_embed'
     user_ids = read_user_ids(os.path.join(embed_dir, 'users0{}'.format(int(job_num))))
 
     fn_list = glob.glob('/export/c10/zach/demographics/models/datasets/baseline/' + '*bert_tweets.json.gz')
@@ -436,29 +408,11 @@ def get_all_user_embeddings_parallel():
                 write_dict_to_json(embed_dict, fn=outfn, verbose=False)
 
 
-def get_all_user_text():
-    fn_list = glob.glob('/export/c10/zach/demographics/models/datasets/baseline/' + '*train.bert_tweets.json.gz')
-    # fn_list += glob.glob('/export/c10/zach/demographics/models/datasets/noisy/' + '*train.bert_tweets.json.gz')
-    print(len(fn_list))
-    outf = open('baseline_tweets.txt', 'w')
-    tweet_ids = set()
-    for fn in fn_list:
-        print(fn)
-        with gzip.open(fn, 'r') as inf:
-            for line in inf:
-                data = json.loads(line.strip().decode('utf8'))
-                if data['id_str'] in tweet_ids:
-                    continue
-                tweet_ids.add(data['id_str'])
-                for t in data['texts']:
-                    outf.write("{}\n".format(t))
-                outf.write("\n")
-    outf.close()
-
-
 if __name__ == '__main__':
+    """
+    run get_all_user_embeddings_parallel() first to get the embeddings for all users
+    then run_timeline_model() for model performance
+    """
     # run_description_model()
     run_timeline_model()
-    # get_all_user_embeddings()
     # get_all_user_embeddings_parallel()
-    # get_all_user_text()
