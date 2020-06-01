@@ -293,20 +293,12 @@ files = glob.glob(sourcedir + '{}/*.json.gz'.format(group))
 files.sort()
 print("{} files in source directory".format(len(files)))
 # TODO: if statuses files are stored properly, it doesn't need to check the ids.
-# group_ids = readIdFromTxt(os.path.join(OUTDIR, 'id_zach_{}_self_report.txt'.format(group)))
 
 users = defaultdict(dict)
 start = time.time()
 print('Start processing {} group at {}'.format(group, time.strftime('%X %x %Z')))
 processed = 0
 for f in files:
-    # regexp = r'\/([0-9]*)_statuses.json.gz'
-    # matched = re.search(regexp, f)
-    # print(f)
-    # print(matched.group(1))
-    # if matched is not None and matched.group(1) not in group_ids.keys():
-    #     print(matched.group(1))
-    #     continue
     users.update(collectFeaturesFromTimeline(f))
     processed += 1
     if processed % 200 == 0:

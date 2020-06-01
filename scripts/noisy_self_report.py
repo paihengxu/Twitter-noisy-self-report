@@ -5,8 +5,7 @@ import sys
 import glob
 import string
 
-sys.path.append("/export/c10/zach/libs/demographer")
-from demographer.transformer_indorg import Transformer
+import demographer
 from demographer.indorg import IndividualOrgDemographer
 import numpy as np
 from nltk.tokenize import TweetTokenizer

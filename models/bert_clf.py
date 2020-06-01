@@ -17,7 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix
 from collections import defaultdict
 
-ZACH_MAP = {
+LABEL_MAP = {
     "Asian": 3,
     "A": 3,
     "asian": 3,
@@ -124,7 +124,7 @@ def construct_dataset(fn, input='description'):
         if input == 'description':
             dataset.append(TweetUser(data['user_id'], data['description'], data['label']))
         else:
-            dataset.append(TweetTimeline(data['id_str'], data['texts'], ZACH_MAP[data['label']]))
+            dataset.append(TweetTimeline(data['id_str'], data['texts'], LABEL_MAP[data['label']]))
 
     return dataset
 
@@ -218,9 +218,6 @@ def init_models(distil=True, model_name=MODEL_NAME):
 ### training setting
 
 def get_bert_feature(train_fn, dev_fn, test_fn, input='description'):
-    # pre_process_url = True  # Set to remove URLs
-    # pre_process_usr = True
-
     result = defaultdict(dict)
 
     fn_mapping = {
@@ -302,11 +299,8 @@ def param_search(dataset, dataset_setting, task):
                                dataset['dev']['label'], model, c))
 
         best_c = sorted(result_list, key=lambda x: x[1], reverse=True)[0][0]
-        # best_model = LogisticRegression(solver='liblinear', penalty='l2', C=best_c, random_state=0)
         best_model = sorted(result_list, key=lambda x: x[1], reverse=True)[0][3]
         print('best model performance on test set:', best_c)
-        # c, f1, acc = fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['test']['data'],
-        #                dataset['test']['label'], best_model, best_c)
         y_pred = best_model.predict(dataset['test']['data'])
         report = classification_report(dataset['test']['label'], y_pred, output_dict=True)
 
@@ -382,8 +376,8 @@ def get_all_user_embeddings_parallel():
     assert 0 <= int(job_num) <= 3
     user_ids = read_user_ids(os.path.join(embed_dir, 'users0{}'.format(int(job_num))))
 
-    fn_list = glob.glob('/export/c10/zach/demographics/models/datasets/baseline/' + '*bert_tweets.json.gz')
-    fn_list += glob.glob('/export/c10/zach/demographics/models/datasets/noisy/' + '*bert_tweets.json.gz')
+    fn_list = glob.glob('/path/to/dev_test/datasets/' + '*bert_tweets.json.gz')
+    fn_list += glob.glob('/path/to/train/datasets/' + '*bert_tweets.json.gz')
 
     # init model
     model, tokenizer, device = init_models()
@@ -403,7 +397,7 @@ def get_all_user_embeddings_parallel():
                 outfn = os.path.join(embed_dir, "{}_embed.json.gz".format(_id))
                 if os.path.exists(outfn):
                     continue
-                one_user = [TweetTimeline(_id, data['texts'], ZACH_MAP[data['label']])]
+                one_user = [TweetTimeline(_id, data['texts'], LABEL_MAP[data['label']])]
                 embed_dict = get_bert_embeddings(one_user, model=model, tokenizer=tokenizer, device=device, input='timeline')
                 write_dict_to_json(embed_dict, fn=outfn, verbose=False)
 

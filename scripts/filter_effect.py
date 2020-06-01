@@ -1,7 +1,6 @@
 from noisy_self_report import *
 
 class filterEffect(noisySelfReport):
-    # TODO: could put this into another script, inherit this class then add this function
     def effectivenessFilters(self):
         filter_params = {
             "bigram": False,
@@ -102,6 +101,6 @@ if __name__ == '__main__':
             "possessive_pronouns": False}
 
     # source file must contain all users in dev set.
-    sourcefile = '/export/c10/zach/data/demographics/descriptions/exact_group.2018.json.gz'
+    sourcefile = '/path/to/sourcefile'
     nsr_fe = filterEffect(task, filter_params, win, thre, tfidf, sourcefile, outdir, eval=True)
     nsr_fe.effectivenessFilters()
