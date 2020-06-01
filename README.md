@@ -1,7 +1,6 @@
 # Twitter-noisy-self-report
 Code for "Using Noisy Self-Reports to Predict Twitter User Demographics" 
 
-<!--- sourcefile defined later. maybe present some sample users without violating term of services -->
 To get noisy labeled dataset, run:
 ```
 python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile src/sample_tweet.json.gz --outdir noisy_labeled --simple
@@ -38,7 +37,7 @@ python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefil
 * contact the authors for the dev set used in the paper.
 
 ### Demographics prediction
-Collect 200 tweets for each user.
+Collect 200 tweets for each user. Refer [demographer](https://bitbucket.org/mdredze/demographer/src/master/) for more information.
 
 ### Group analysis
 To get results for list-based features and quantitative linguistic features, run
