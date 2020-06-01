@@ -1,7 +1,6 @@
 # Twitter-noisy-self-report
 Code for "Using Noisy Self-Reports to Predict Twitter User Demographics" 
 
-<!--- sourcefile defined later. maybe present some sample users without violating term of services -->
 To get noisy labeled dataset, run:
 ```
 python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefile src/sample_tweet.json.gz --outdir noisy_labeled --simple
@@ -13,10 +12,10 @@ python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefil
 
 ## Dataset
 We provide our collected datasets in ```src/```. 
-Note due to ethical issue, we only provide user ids and corresponding demographics labels.
-* ```src/dataset_race_simple_win5_thre0.35.json.gz``` and ```src/dataset_race_tfidf_win11_thre2.5.json.gz``` are the large dataset
+Note due to ethical issue, we only provide user ids and corresponding demographics labels after filling out the Data Usage Agreement: [here](http://www.cs.jhu.edu/~mdredze/demographics-training-data/).
+* we provide two large datasets
 collected using noisy self report from users' descriptions, with simple co-occurrence and tfidf weighting strategy respectively.
-* files in ```src/manual_labeled``` are manually labeled users. 
+* files in ```src/manual_labeled``` are manually labeled users. Data Usage Agreement required [here](http://www.cs.jhu.edu/~mdredze/demographics-training-data/).
 ```rule_out_bigrams.json.gz``` contains bigrams with race-related query words that cause false positive.
 * files in ```src/self_reporty_words/``` are candidate self-report words collected from 177M user descriptions.
 
@@ -38,7 +37,7 @@ python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefil
 * contact the authors for the dev set used in the paper.
 
 ### Demographics prediction
-Collect 200 tweets for each user.
+Collect 200 tweets for each user. Refer [demographer](https://bitbucket.org/mdredze/demographer/src/master/) for more information.
 
 ### Group analysis
 To get results for list-based features and quantitative linguistic features, run
