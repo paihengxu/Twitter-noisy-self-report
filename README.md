@@ -37,12 +37,16 @@ python scripts/label_eval.py --task race --window 5 --threshold 0.35 --sourcefil
 * contact the authors for the dev set used in the paper.
 
 ### Demographics prediction
-Collect 200 tweets for each user. Refer [demographer](https://bitbucket.org/mdredze/demographer/src/master/) for more information.
+Collect 200 tweets for each user. For BERT model, run
+```
+python models/bert_clf.py
+```
+Refer [demographer](https://bitbucket.org/mdredze/demographer/src/master/) for other models.
 
 ### Group analysis
 To get results for list-based features and quantitative linguistic features, run
 ```
-python scripts/group_analysis.py --group latin --sourcedir /export/fs03/a10/pxu/groups-analysis/src/scraped/merged/ --outdir result/
+python scripts/group_analysis.py --group latin --sourcedir /path/to/scraped/tweets/ --outdir result/
 ```
 * change the input for ```--group``` to collect the features for different group.
 * before running the script, the timeline for each users should be collected first. 
