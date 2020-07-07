@@ -33,8 +33,17 @@ LABEL_MAP = {
     "white": 4,
 }
 
+LABEL_BACK_MAP = {
+    1: "B",
+    2: "H/L",
+    3: "A",
+    4: "W"
+}
+
 MODEL_NAME = "distilbert-base-uncased"
-embed_dir = '/path/to/embeddings'
+# embed_dir = '/path/to/embeddings'
+embed_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/distil_bert_embed'
+out_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/'
 
 class TweetUser(NamedTuple):
     user_id: str
@@ -100,14 +109,17 @@ def average_embedding(embed_list):
     return np.mean(embed_list, axis=0)
 
 
-def vectorize(feature_dict, labels):
+def vectorize(feature_dict, labels=None):
     vecs = []
     label_vecs = []
+    user_ids = []
     for k, v in feature_dict.items():
         if len(v) == 768:
-            label_vecs.append(labels[k])
+            if labels:
+                label_vecs.append(labels[k])
             vecs.append(v)
-    return vecs, label_vecs
+            user_ids.append(k)
+    return vecs, label_vecs, user_ids
 
 
 def construct_dataset(fn, input='description'):
@@ -248,7 +260,7 @@ def get_bert_feature(train_fn, dev_fn, test_fn, input='description'):
                 feature = read_bert_embeddings(data)
             write_dict_to_json(feature, fn=outfn)
 
-        feats_data, feats_label = vectorize(feature, labels)
+        feats_data, feats_label, _ = vectorize(feature, labels)
         print(len(feats_data))
         print(len(feats_data[1]))
         result[fn_key]['data'] = feats_data
@@ -373,11 +385,12 @@ def run_timeline_model():
 
 def get_all_user_embeddings_parallel():
     job_num = sys.argv[-1]
-    assert 0 <= int(job_num) <= 3
-    user_ids = read_user_ids(os.path.join(embed_dir, 'users0{}'.format(int(job_num))))
+    # assert 0 <= int(job_num) <= 3
+    user_ids = read_user_ids(os.path.join('/export/c10/pxu/data/social_distancing_user/bert_tweets/', 'users{}'.format(job_num)))
 
-    fn_list = glob.glob('/path/to/dev_test/datasets/' + '*bert_tweets.json.gz')
-    fn_list += glob.glob('/path/to/train/datasets/' + '*bert_tweets.json.gz')
+    # fn_list = glob.glob('/path/to/dev_test/datasets/' + '*bert_tweets.json.gz')
+    # fn_list += glob.glob('/path/to/train/datasets/' + '*bert_tweets.json.gz')
+    fn_list = glob.glob('/export/c10/pxu/data/social_distancing_user/bert_tweets/' + '*.json.gz')
 
     # init model
     model, tokenizer, device = init_models()
@@ -397,9 +410,46 @@ def get_all_user_embeddings_parallel():
                 outfn = os.path.join(embed_dir, "{}_embed.json.gz".format(_id))
                 if os.path.exists(outfn):
                     continue
-                one_user = [TweetTimeline(_id, data['texts'], LABEL_MAP[data['label']])]
+                if 'label' in data:
+                    one_user = [TweetTimeline(_id, data['texts'], LABEL_MAP[data['label']])]
+                else:
+                    one_user = [TweetTimeline(_id, data['texts'], None)]
                 embed_dict = get_bert_embeddings(one_user, model=model, tokenizer=tokenizer, device=device, input='timeline')
                 write_dict_to_json(embed_dict, fn=outfn, verbose=False)
+
+
+def predict(model_fn, user_id_fn):
+    ## load model
+    assert os.path.exists(model_fn), "{} not exists".format(model_fn)
+    loaded_model = pickle.load(open(model_fn, 'rb'))
+    print("successfully load model from {}".format(model_fn))
+
+    ## load user ids
+    user_ids = read_user_ids(user_id_fn)
+
+    ## load/vectorize dataset
+    features = {}
+    # count = 0
+    for _id in user_ids:
+        # count += 1
+        # if count > 200:
+        #     break
+        embed_fn = os.path.join(embed_dir, '{}_embed.json.gz'.format(_id))
+        with gzip.open(embed_fn, 'r') as inf:
+            for line in inf:
+                data = json.loads(line.strip().decode('utf8'))
+                features.update(data)
+    feats_data, _, feats_ids = vectorize(features)
+
+    y_pred = loaded_model.predict(feats_data)
+
+    ## output prediction result
+    # user_id_fn basename expected to be users00...
+    outfn = os.path.join(out_dir, os.path.basename(user_id_fn)+'_out.json')
+    with open(outfn, 'w') as outf:
+        for _id, demog in zip(feats_ids, y_pred):
+            obj = {"id": _id, "label": LABEL_BACK_MAP[demog]}
+            outf.write("{}\n".format(obj))
 
 
 if __name__ == '__main__':
@@ -407,6 +457,9 @@ if __name__ == '__main__':
     run get_all_user_embeddings_parallel() first to get the embeddings for all users
     then run_timeline_model() for model performance
     """
+    best_model_fn = '/export/c10/pxu/Twitter-noisy-self-report/scripts/balanced.7756+crowd.p'
     # run_description_model()
-    run_timeline_model()
+    # run_timeline_model()
     # get_all_user_embeddings_parallel()
+    in_fn = sys.argv[-1]
+    predict(best_model_fn, os.path.join(out_dir, in_fn))
