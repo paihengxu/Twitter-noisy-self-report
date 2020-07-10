@@ -419,6 +419,10 @@ def get_all_user_embeddings_parallel():
 
 
 def predict(model_fn, user_id_fn):
+    # user_id_fn basename expected to be users00...
+    outfn = os.path.join(out_dir, os.path.basename(user_id_fn) + '_out.json')
+    assert not os.path.exists(outfn), "{} already exists.\n terminated...".format(outfn)
+
     ## load model
     assert os.path.exists(model_fn), "{} not exists".format(model_fn)
     loaded_model = pickle.load(open(model_fn, 'rb'))
@@ -435,6 +439,9 @@ def predict(model_fn, user_id_fn):
         # if count > 200:
         #     break
         embed_fn = os.path.join(embed_dir, '{}_embed.json.gz'.format(_id))
+        if not os.path.exists(embed_fn):
+            print(_id)
+            continue
         with gzip.open(embed_fn, 'r') as inf:
             for line in inf:
                 data = json.loads(line.strip().decode('utf8'))
@@ -444,12 +451,10 @@ def predict(model_fn, user_id_fn):
     y_pred = loaded_model.predict(feats_data)
 
     ## output prediction result
-    # user_id_fn basename expected to be users00...
-    outfn = os.path.join(out_dir, os.path.basename(user_id_fn)+'_out.json')
     with open(outfn, 'w') as outf:
         for _id, demog in zip(feats_ids, y_pred):
             obj = {"id": _id, "label": LABEL_BACK_MAP[demog]}
-            outf.write("{}\n".format(obj))
+            outf.write("{}\n".format(json.dumps(obj)))
 
 
 if __name__ == '__main__':
