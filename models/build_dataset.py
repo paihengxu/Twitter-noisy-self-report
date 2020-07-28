@@ -2,34 +2,30 @@ import gzip
 import json
 import os
 import sys
+from argparse import ArgumentParser
 
-dataset_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/'
-tweet_dir = '/export/c10/pxu/data/location_0330/scraped'
 
 def read_user_ids(fn):
     user_set = set()
-    # if fn.endswith('.txt') :
     with open(fn, 'r') as inf:
         for line in inf:
             user_set.add(line.strip())
-    # elif fn.endswith('.json.gz'):
-    #     with gzip.open(fn, 'r') as inf:
-    #         for line in inf:
-    #             data = json.loads(line.strip().decode('utf8'))
-    #             user_set.add(data['user']['id_str'])
     return user_set
 
 
-def build(job_num, ignore_rt=True, tweet_limit=200):
-    user_set = read_user_ids(fn=os.path.join(dataset_dir, "users{}".format(job_num)))
-
+def build(user_id_fn, dataset_dir, tweet_dir, ignore_rt=True, tweet_limit=200, user_limit=None):
+    # user_set = read_user_ids(fn=os.path.join(dataset_dir, "users{}".format(job_num)))
+    user_set = read_user_ids(user_id_fn)
+    id_fn = os.path.basename(user_id_fn).split('.')[0]
     print("{} users to process".format(len(user_set)))
-    outf = gzip.open(os.path.join(dataset_dir, "{}.json.gz".format(job_num)), 'w')
-    # count = 0
+    outf_fn = os.path.join(dataset_dir, "{}_dataset.json.gz".format(id_fn))
+    print("writing to {}".format(outf_fn))
+    outf = gzip.open(outf_fn, 'w')
+    count = 0
     for _id in user_set:
-        # count += 1
-        # if count > 1000:
-        #     break
+        count += 1
+        if user_limit and count > user_limit:
+            break
         timeline_fn = os.path.join(tweet_dir, "{}_statuses.json.gz".format(_id))
         if not os.path.exists(timeline_fn):
             continue
@@ -59,5 +55,16 @@ def build(job_num, ignore_rt=True, tweet_limit=200):
 
 
 if __name__ == '__main__':
-    job_num = sys.argv[-1]
-    build(job_num)
+    parser = ArgumentParser()
+    parser.add_argument('--user_id_fn', type=str, help='a txt file for user ids')
+    parser.add_argument('--dataset_dir', type=str, help='Directory for built dataset')
+    parser.add_argument('--tweet_dir', type=str, help='Directory where you stored scraped tweet timelines')
+    ## optional arguments
+    parser.add_argument('--ignore_rt', type=bool, default=True, help='Whether include retweets in the dataset')
+    parser.add_argument('--tweet_limit', type=int, default=200, help='Max number of tweet to include')
+    parser.add_argument('--user_limit', type=int, default=None, help='Max number of users to include, used for testing')
+
+
+    args = parser.parse_args()
+    build(user_id_fn=args.user_id_fn, dataset_dir=args.dataset_dir, tweet_dir=args.tweet_dir,
+          ignore_rt=args.ignore_rt, tweet_limit=args.tweet_limit, user_limit=args.user_limit)

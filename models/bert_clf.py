@@ -8,6 +8,7 @@ import json
 from typing import NamedTuple, List
 import warnings
 import pickle
+from argparse import ArgumentParser
 
 warnings.filterwarnings('ignore')
 import torch
@@ -42,8 +43,6 @@ LABEL_BACK_MAP = {
 
 MODEL_NAME = "distilbert-base-uncased"
 # embed_dir = '/path/to/embeddings'
-embed_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/distil_bert_embed'
-out_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/'
 
 class TweetUser(NamedTuple):
     user_id: str
@@ -210,7 +209,7 @@ def read_user_ids(fn):
     return user_ids
 
 
-def init_models(distil=True, model_name=MODEL_NAME):
+def init_models(use_cuda, distil=True, model_name=MODEL_NAME):
     # 'bert-base-uncased'
     if distil:
         tokenizer = DistilBertTokenizer.from_pretrained(model_name)
@@ -218,11 +217,12 @@ def init_models(distil=True, model_name=MODEL_NAME):
     else:
         tokenizer = BertTokenizer.from_pretrained(model_name)
         model = BertModel.from_pretrained(model_name)
-    if torch.cuda.is_available():
+    if use_cuda and torch.cuda.is_available():
         print("using GPU")
         model.cuda()
         device = torch.device('cuda:0')
     else:
+        print('using CPU')
         device = torch.device('cpu')
     return model, tokenizer, device
 
@@ -383,43 +383,7 @@ def run_timeline_model():
     outf.close()
 
 
-def get_all_user_embeddings_parallel():
-    job_num = sys.argv[-1]
-    # assert 0 <= int(job_num) <= 3
-    user_ids = read_user_ids(os.path.join('/export/c10/pxu/data/social_distancing_user/bert_tweets/', 'users{}'.format(job_num)))
-
-    # fn_list = glob.glob('/path/to/dev_test/datasets/' + '*bert_tweets.json.gz')
-    # fn_list += glob.glob('/path/to/train/datasets/' + '*bert_tweets.json.gz')
-    fn_list = glob.glob('/export/c10/pxu/data/social_distancing_user/bert_tweets/' + '*.json.gz')
-
-    # init model
-    model, tokenizer, device = init_models()
-
-    # count = 0
-    for fn in fn_list:
-        print(fn)
-        with gzip.open(fn, 'r') as inf:
-            for line in inf:
-                # count += 1
-                # if count > 200:
-                #     break
-                data = json.loads(line.strip().decode('utf8'))
-                _id = data['id_str']
-                if _id not in user_ids:
-                    continue
-                outfn = os.path.join(embed_dir, "{}_embed.json.gz".format(_id))
-                if os.path.exists(outfn):
-                    continue
-                if 'label' in data:
-                    one_user = [TweetTimeline(_id, data['texts'], LABEL_MAP[data['label']])]
-                else:
-                    one_user = [TweetTimeline(_id, data['texts'], None)]
-                embed_dict = get_bert_embeddings(one_user, model=model, tokenizer=tokenizer, device=device, input='timeline')
-                write_dict_to_json(embed_dict, fn=outfn, verbose=False)
-
-
-def predict(model_fn, user_id_fn):
-    # user_id_fn basename expected to be users00...
+def predict(model_fn, out_dir, embed_dir, user_id_fn):
     outfn = os.path.join(out_dir, os.path.basename(user_id_fn) + '_out.json')
     assert not os.path.exists(outfn), "{} already exists.\n terminated...".format(outfn)
 
@@ -433,11 +397,7 @@ def predict(model_fn, user_id_fn):
 
     ## load/vectorize dataset
     features = {}
-    # count = 0
     for _id in user_ids:
-        # count += 1
-        # if count > 200:
-        #     break
         embed_fn = os.path.join(embed_dir, '{}_embed.json.gz'.format(_id))
         if not os.path.exists(embed_fn):
             print(_id)
@@ -457,14 +417,81 @@ def predict(model_fn, user_id_fn):
             outf.write("{}\n".format(json.dumps(obj)))
 
 
+def get_all_user_embeddings_parallel(user_id_fn, dataset_dir, embed_dir, user_limit=None):
+    # user_ids = read_user_ids(os.path.join('/export/c10/pxu/data/social_distancing_user/bert_tweets/', 'users{}'.format(job_num)))
+    # user_ids = read_user_ids(user_id_fn)
+
+    # fn_list = glob.glob('/path/to/dev_test/datasets/' + '*bert_tweets.json.gz')
+    # fn_list += glob.glob('/path/to/train/datasets/' + '*bert_tweets.json.gz')
+    # fn_list = glob.glob('/export/c10/pxu/data/social_distancing_user/bert_tweets/' + '*.json.gz')
+    print("writing embeddings to {}".format(embed_dir))
+
+    id_fn = os.path.basename(user_id_fn).split('.')[0]
+    dataset_fn = os.path.join(dataset_dir, "{}_dataset.json.gz".format(id_fn))
+
+    # init model
+    model, tokenizer, device = init_models()
+    print('model initialized')
+
+    count = 0
+    with gzip.open(dataset_fn, 'r') as inf:
+        for line in inf:
+            count += 1
+            if user_limit and count > user_limit:
+                break
+            data = json.loads(line.strip().decode('utf8'))
+            _id = data['id_str']
+            print(_id)
+            # if _id not in user_ids:
+            #     continue
+            outfn = os.path.join(embed_dir, "{}_embed.json.gz".format(_id))
+            if os.path.exists(outfn):
+                continue
+            if 'label' in data:
+                one_user = [TweetTimeline(_id, data['texts'], LABEL_MAP[data['label']])]
+            else:
+                one_user = [TweetTimeline(_id, data['texts'], None)]
+            embed_dict = get_bert_embeddings(one_user, model=model, tokenizer=tokenizer, device=device, input='timeline')
+            write_dict_to_json(embed_dict, fn=outfn, verbose=False)
+
+
 if __name__ == '__main__':
     """
     run get_all_user_embeddings_parallel() first to get the embeddings for all users
     then run_timeline_model() for model performance
     """
-    best_model_fn = '/export/c10/pxu/Twitter-noisy-self-report/scripts/balanced.7756+crowd.p'
+    parser = ArgumentParser()
+    parser.add_argument('--task', choices=('embedding', 'prediction', 'experiment'),
+                        help='Build dataset first, then get embedding, do prediction or experiment at last.'
+                             'experiment for training/testing in the paper ')
+    # parser.add_argument('--job_num', type=str, default=None,
+    #                     help='If splitting the job, input the job_num to match the file names')
+    parser.add_argument('--user_id_fn', type=str, default=None, help='a txt file for user ids')
+    parser.add_argument('--embed_dir', type=str, help='Directory for user embeddings')
+    parser.add_argument('--dataset_dir', nargs='?', type=str, help='Directory for built dataset')
+    parser.add_argument('--out_dir', nargs='?', type=str, help='Directory for model output')
+    parser.add_argument('--model_fn', type=str, default='/export/c10/pxu/Twitter-noisy-self-report/scripts/balanced.7756+crowd.p',
+                        help='Path to model')
+    # TODO: Add class to share these variables
+    parser.add_argument('--cuda', type=bool, default=True, help='Whether use cuda')
+
+
+    # embed_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/distil_bert_embed'
+    # out_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/'
+
+    args = parser.parse_args()
+    best_model_fn = args.model_fn
+
+    if args.task == 'embedding':
+        assert args.dataset_dir is not None, 'Please specify out_dir for getting embeddings'
+        get_all_user_embeddings_parallel(user_id_fn=args.user_id_fn, dataset_dir=args.dataset_dir, embed_dir=args.embed_dir)
+    elif args.task == 'prediction':
+        assert args.out_dir is not None, 'Please specify out_dir for prediction result'
+        predict(model_fn=args.model_fn, out_dir=args.out_dir, embed_dir=args.embed_dir, user_id_fn=args.user_id_fn)
+    else:
+        raise NotImplementedError
     # run_description_model()
     # run_timeline_model()
     # get_all_user_embeddings_parallel()
-    in_fn = sys.argv[-1]
-    predict(best_model_fn, os.path.join(out_dir, in_fn))
+    # in_fn = sys.argv[-1]
+    # predict(model_fn=best_model_fn, in_fn=os.path.join(out_dir, in_fn))
