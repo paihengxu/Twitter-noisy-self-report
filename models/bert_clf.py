@@ -62,7 +62,7 @@ class TweetTimeline(NamedTuple):
 
 ### featurization
 class BertRaceClassifier:
-    def __init__(self, user_id_fn=None, dataset_dir=None, embed_dir=None, out_dir=None, input='timeline',
+    def __init__(self, user_id_fn=None, dataset_dir=None, embed_dir=None, out_dir=None, feature_dir=None, input='timeline',
                  best_model_fn=None, model_name="distilbert-base-uncased", use_cuda=True):
         self.user_id_fn = user_id_fn
         self.dataset_dir = dataset_dir
@@ -72,6 +72,8 @@ class BertRaceClassifier:
         self.model_fn = best_model_fn
         self.model_name = model_name
         self.use_cuda = use_cuda
+        # dir to store intermediate feature json.gz files (for experiment task)
+        self.feature_dir = feature_dir
 
 
     def init_models(self, distil=True):
@@ -201,10 +203,12 @@ class BertRaceClassifier:
 
             name = os.path.basename(fn).split('.')[0]
 
-            outfn = '{}.bert.json.gz'.format(name)
+            outfn = os.path.join(self.feature_dir, '{}.bert.json.gz'.format(name))
             if os.path.exists(outfn):
                 feature = read_dict_from_json(fn=outfn)
             else:
+                print(outfn)
+                os._exit(1)
                 if input == 'description':
                     feature = self.get_bert_embeddings(data, input)
                 else:
@@ -221,7 +225,7 @@ class BertRaceClassifier:
         return result
 
     @staticmethod
-    def fit_test_model(self, train, train_label, test, test_label, model, c):
+    def fit_test_model(train, train_label, test, test_label, model, c):
         model.fit(train, train_label)
         # Metrics
         y_pred = model.predict(test)
@@ -243,7 +247,7 @@ class BertRaceClassifier:
                 outf.write("{}\n".format(json.dumps(obj)))
 
 
-    def param_search(self, dataset, dataset_setting, task):
+    def param_search(self, dataset, dataset_setting, task, class_weight=None):
         """
         only c in l2 regularization
         """
@@ -258,7 +262,7 @@ class BertRaceClassifier:
             result_list = []
             for c in C_param_range:
                 print(c)
-                model = LogisticRegression(solver='liblinear', penalty='l2', C=c, random_state=0)
+                model = LogisticRegression(solver='liblinear', penalty='l2', C=c, random_state=0, class_weight=class_weight)
                 result_list.append(
                     self.fit_test_model(dataset['train']['data'], dataset['train']['label'], dataset['dev']['data'],
                                    dataset['dev']['label'], model, c))
@@ -295,9 +299,12 @@ class BertRaceClassifier:
             self.param_search(dataset, "description", task)
 
 
-    def run_timeline_model(self):
+    def run_timeline_model(self, class_weight=None):
         # TODO: update these dirs
         # data_dir = '/path/to/training/data'
+        # these dirs doesn't matter
+        baseline_dir = '/export/c10/zach/demographics/models/datasets/baseline'
+        data_dir = '/export/c10/zach/demographics/models/datasets/noisy'
         # baseline_dir = '/path/to/dev_test/data'
         datasets = ['baseline', 'group_person.indorg', 'exact_group.thre035', 'balanced.7756']
         # datasets = ['baseline']
@@ -330,7 +337,7 @@ class BertRaceClassifier:
                     dataset_setting = dataset_name
                     dataset_setting += "+crowd" if crowd else ""
 
-                    best_f1, best_acc = self.param_search(dataset, dataset_setting, task)
+                    best_f1, best_acc = self.param_search(dataset, dataset_setting, task, class_weight)
                     outf.write("{}\n".format(",".join([dataset_setting, str(best_f1), str(best_acc)])))
 
                     print(time.time() - start)
@@ -427,19 +434,16 @@ if __name__ == '__main__':
     parser.add_argument('--embed_dir', type=str, help='Directory for user embeddings')
     parser.add_argument('--dataset_dir', nargs='?', type=str, help='Directory for built dataset')
     parser.add_argument('--out_dir', nargs='?', type=str, help='Directory for model output')
-    parser.add_argument('--model_fn', type=str, default='/export/c10/pxu/Twitter-noisy-self-report/scripts/balanced.7756+crowd.p',
+    parser.add_argument('--model_fn', type=str, default='/export/c10/pxu/Twitter-noisy-self-report/scripts/distil_bert_model/balanced.7756+crowd.p',
                         help='Path to model')
     parser.add_argument('--cuda', action='store_true', help='Whether use cuda')
-
-
-    # embed_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/distil_bert_embed'
-    # out_dir = '/export/c10/pxu/data/social_distancing_user/bert_tweets/'
 
     args = parser.parse_args()
     start = time.time()
 
     clf = BertRaceClassifier(user_id_fn=args.user_id_fn, dataset_dir=args.dataset_dir, embed_dir=args.embed_dir,
-                             out_dir=args.out_dir, input='timeline', best_model_fn=args.model_fn, use_cuda=args.cuda)
+                             out_dir=args.out_dir, input='timeline', best_model_fn=args.model_fn, use_cuda=args.cuda,
+                             feature_dir='/export/c10/pxu/Twitter-noisy-self-report/scripts/distil_bert_feature')
 
     if args.task == 'embedding':
         assert args.dataset_dir is not None, 'Please specify out_dir for getting embeddings'
@@ -447,13 +451,14 @@ if __name__ == '__main__':
     elif args.task == 'prediction':
         assert args.out_dir is not None, 'Please specify out_dir for prediction result'
         clf.predict()
+    elif args.task == 'experiment':
+        clf.run_timeline_model(class_weight='balanced')
     else:
         raise NotImplementedError
 
     print("Job done in {} seconds".format(time.time() - start))
 
     # run_description_model()
-    # run_timeline_model()
     # get_all_user_embeddings_parallel()
     # in_fn = sys.argv[-1]
     # predict(model_fn=best_model_fn, in_fn=os.path.join(out_dir, in_fn))
